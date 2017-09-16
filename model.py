@@ -114,7 +114,6 @@ class word2vec(object):
         self.train = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.loss)
 
 
-
     def _retore_model(self,sess):
 
         self.X = sess.graph.get_tensor_by_name("input_X:0")
