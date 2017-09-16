@@ -26,7 +26,7 @@ def create_cbow_data(titles, context_window):
 def main():
     data_path = '/Users/matt.meng'
     input_pickle_file = 'processed_titles_data.pkl'
-    output_pickle_file = 'processed_titles_data.pkl'
+    output_pickle_file = 'titles_CBOW_data.pkl'
 
     with open(os.path.join(data_path, input_pickle_file)) as input_file:
         data = pickle.load(input_file)
@@ -38,3 +38,6 @@ def main():
                'target_list': target_list_}
     with open(os.path.join(data_path, output_pickle_file), 'wb') as handle:
         pickle.dump(content, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+if __name__ == '__main__':
+    main()
