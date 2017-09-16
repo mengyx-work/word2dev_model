@@ -154,7 +154,7 @@ class word2vec(object):
                 saver.restore(sess, tf.train.latest_checkpoint(config['model_path']))
                 self._retore_model(sess)
                 step = sess.run(self.global_step)
-                print 'current step: ', step
+                print 'restore model from step: ', step
 
             start_time = time.time()
             while step < config['num_batches']:
