@@ -1,5 +1,20 @@
 import cPickle as pickle
 import os, collections
+import pandas as pd
+
+def generate_tensorboard_token_dict(pickle_file, token_dict_name='tensorboard_token_dict.tsv'):
+    pickle_file_path = os.path.join(os.path.expanduser("~"), pickle_file)
+    with open(pickle_file_path, 'rb') as input_stream:
+        data = pickle.load(input_stream)
+    if 'reverse_token_dict' not in data.keys():
+        raise ValueError("expected key not in pickle file {}".format(pickle_file_path))
+    index = data['reverse_token_dict'].keys()
+    token_name = [data['reverse_token_dict'][key] for key in index]
+    token_data = pd.DataFrame({'index': index, 'token_name': token_name})
+    output_pickle_file = os.path.join(os.path.expanduser("~"), token_dict_name)
+    token_data.to_csv(output_pickle_file, sep='\t', index=False)
+    print "finish creating TensorBoard dict with {} entries...".format(len(token_name))
+
 
 def create_cbow_data(titles, context_window):
     span = 2 * context_window + 1
@@ -23,7 +38,7 @@ def create_cbow_data(titles, context_window):
     return training_list, target_list
 
 
-def main():
+def generate_cbow_pickle_file():
     data_path = '/Users/matt.meng'
     input_pickle_file = 'processed_titles_data.pkl'
     output_pickle_file = 'titles_CBOW_data.pkl'
@@ -38,6 +53,11 @@ def main():
                'target_list': target_list_}
     with open(os.path.join(data_path, output_pickle_file), 'wb') as handle:
         pickle.dump(content, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+def main():
+    #pickle_file = 'titles_CBOW_data.pkl'
+    pickle_file = 'processed_titles_data.pkl'
+    generate_tensorboard_token_dict(pickle_file)
 
 if __name__ == '__main__':
     main()
