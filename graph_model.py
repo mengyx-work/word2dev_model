@@ -40,8 +40,8 @@ class word2vec(object):
         self.learning_rate = learning_rate
         self.model_name = model_name
 
-        #self.graph = tf.Graph()
-        #self.sess = tf.Session(self.graph)
+        self.graph = tf.Graph()
+        self.sess = tf.Session(graph=self.graph)
 
         # assert config.batch_size % config.num_skip == 0
         # assert config.num_skip <= 2 * config.context_window
@@ -98,7 +98,7 @@ class word2vec(object):
             buffer.append(np.random.randint(self.vocab_size, size=1))
         return X, y
 
-    def _build_graph(self):
+    def _create_loss(self):
         '''build the graph, lookup the embedding for X and use NCE for loss
 
         For CBOW model:
@@ -116,61 +116,79 @@ class word2vec(object):
         single_variable_summary(self.loss, 'loss')
         self.train = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.loss)
 
-    def _retore_model(self, sess):
+    def _retore_model_variables(self):
         '''restore the placeholders and Variables by name, given the session.
         '''
-        self.X = sess.graph.get_tensor_by_name("input_X:0")
-        self.y = sess.graph.get_tensor_by_name("input_y:0")
-        self.global_step = sess.graph.get_tensor_by_name("global_step:0")
+        self.X = self.sess.graph.get_tensor_by_name("input_X:0")
+        self.y = self.sess.graph.get_tensor_by_name("input_y:0")
+        self.global_step = self.sess.graph.get_tensor_by_name("global_step:0")
 
-        self.train = sess.graph.get_operation_by_name("Adam")
-        self.loss = sess.graph.get_tensor_by_name("Mean:0")
-        self.increment_global_step_op = sess.graph.get_tensor_by_name("increment_step:0")
+        self.train = self.sess.graph.get_operation_by_name("Adam")
+        self.loss = self.sess.graph.get_tensor_by_name("Mean:0")
+        self.increment_global_step_op = self.sess.graph.get_tensor_by_name("increment_step:0")
+
+    def _restore_model(self, config):
+        '''restore the model from `model_path`, use `_retore_model_variables` to
+        restore the variables and also restore the global step
+        Return:
+            step (int): the restored global step
+        '''
+        with self.graph.as_default():
+            self.saver = tf.train.import_meta_graph(model_meta_file(config['model_path']))
+            self.saver.restore(self.sess, tf.train.latest_checkpoint(config['model_path']))
+            self._retore_model_variables()
+            step = self.sess.run(self.global_step)
+        print 'restore trained models from {}'.format(config['model_path'])
+        print 'restore model from step: ', step
+        return step
+
+    def _build_graph(self, saving_steps):
+        '''build the graph associated nodes and edges
+        '''
+        with self.graph.as_default():
+            self._init_placeholders()
+            self._init_variables(saving_steps)
+            self._create_loss()
+            self.saver = tf.train.Saver(max_to_keep=2, keep_checkpoint_every_n_hours=1)
+            self.sess.run(tf.global_variables_initializer())
+
+    def saving_step_run(self, config):
+        _ = self.sess.run(self.increment_global_step_op)
+        self.saver.save(self.sess, os.path.join(config['model_path'], 'models'), global_step=self.global_step)
+
+    def display_step_run(self, start_time, training_batch, target_batch, step):
+        loss, summary = self.sess.run([self.loss, self.merged_summary_op],
+                                      feed_dict={self.X: training_batch, self.y: target_batch})
+        self.writer.add_summary(summary, step)
+        cur_time = time.time()
+        print 'the loss: {} at step {}, using {:.2f} minutes'.format(loss, step, 1. * (cur_time - start_time) / 60.)
+        return cur_time
 
     def train(self, batches, config, restore_model=False):
+
         if not restore_model:
             clear_folder(config['log_path'])
             clear_folder(config['model_path'])
-
-            self._init_placeholders()
-            self._init_variables(config['saving_steps'])
-            self._build_graph()
-            init = tf.global_variables_initializer()
-            saver = tf.train.Saver(max_to_keep=2, keep_checkpoint_every_n_hours=1)
+            self._build_graph(config['saving_steps'])
+            step = 0
         else:
-            saver = tf.train.import_meta_graph(model_meta_file(config['model_path']))
+            step = self._restore_model()
 
-        writer = tf.summary.FileWriter(config['log_path'])
-        merged_summary_op = tf.summary.merge_all()
-
-        with tf.Session(config=config['sess_config']) as sess:
-            if not restore_model:
-                writer.add_graph(sess.graph)
-                sess.run(init)
-                step = 0
-            else:
-                print 'restore trained models from {}'.format(config['model_path'])
-                saver.restore(sess, tf.train.latest_checkpoint(config['model_path']))
-                self._retore_model(sess)
-                step = sess.run(self.global_step)
-                print 'restore model from step: ', step
+        with self.graph.as_default():
+            self.writer = tf.summary.FileWriter(config['log_path'], self.graph)
+            self.merged_summary_op = tf.summary.merge_all()
 
             start_time = time.time()
             while step < config['num_batches']:
                 training_batch, target_batch = next(batches)
-                _ = sess.run([self.train], feed_dict={self.X: training_batch, self.y: target_batch})
+                _ = self.sess.run([self.train], feed_dict={self.X: training_batch, self.y: target_batch})
                 step += 1
 
                 if step % config['saving_steps'] == 0:
-                    _ = sess.run(self.increment_global_step_op)
-                    saver.save(sess, os.path.join(config['model_path'], 'models'), global_step=self.global_step)
+                    self.saving_step_run(config)
 
                 if step % config['display_steps'] == 0:
-                    loss, summary = sess.run([self.loss, merged_summary_op], feed_dict={self.X: training_batch, self.y: target_batch})
-                    writer.add_summary(summary, step)
-                    cur_time = time.time()
-                    print 'the loss: {} at step {}, using {:.2f} minutes'.format(loss, step, 1.*(cur_time-start_time)/60.)
-                    start_time = cur_time
+                    start_time = self.display_step_run(start_time, training_batch, target_batch, step)
 
 
 
