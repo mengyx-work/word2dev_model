@@ -55,10 +55,14 @@ def generate_cbow_pickle_file(input_pickle_file, output_pickle_file, context_win
 
 
 def main():
-    input_pickle_file = 'processed_titles_data.pkl'
-    output_pickle_file = 'titles_CBOW_data.pkl'
-    context_window = 2
+    #'''
+    #input_pickle_file = 'processed_titles_data.pkl'
+    #output_pickle_file = 'titles_CBOW_data.pkl'
+    input_pickle_file = 'lemmanized_no_stop_words_processed_titles.pkl'
+    output_pickle_file = 'lemmanized_no_stop_words_CBOW_data.pkl'
+    context_window = 1
     generate_cbow_pickle_file(input_pickle_file, output_pickle_file, context_window)
+    #'''
 
     #pickle_file = 'processed_titles_data.pkl'
     #generate_tensorboard_token_dict(pickle_file)

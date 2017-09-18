@@ -2,69 +2,54 @@ import tensorflow as tf
 import numpy as np
 import sys, os, math, collections, time, multiprocessing
 from data import DataGenerator
-import stat
+from model_utils import create_local_model_path, create_local_log_path, clear_folder, \
+    generate_tensorboard_script, model_meta_file
 
-
-def create_local_model_path(common_path, model_name):
-    return os.path.join(common_path, model_name)
-
-
-def create_local_log_path(common_path, model_name):
-    return os.path.join(common_path, model_name, "log")
-
-
-def generate_tensorboard_script(logdir):
-    file_name = "start_tensorboard.sh"
-    with open(file_name, "w") as text_file:
-        text_file.write("#!/bin/bash \n")
-        text_file.write("tensorboard --logdir={}".format(logdir))
-    st = os.stat(file_name)
-    os.chmod(file_name, st.st_mode | stat.S_IEXEC)
-
-
-def model_meta_file(model_path, file_prefix="models"):
-    meta_files = [f for f in os.listdir(model_path) if f[-5:] == '.meta']
-    final_model_files = [f for f in meta_files if file_prefix in f]
-    if len(final_model_files) == 0:
-        raise ValueError("failed to find any model meta files in {}".format(model_path))
-    if len(final_model_files) > 1:
-        print "warning, more than one model meta file is found in {}".format(model_path)
-    return os.path.join(model_path, final_model_files[0])
-
-
-def clear_folder(absolute_folder_path):
-    if not os.path.exists(absolute_folder_path):
-        os.makedirs(absolute_folder_path)
-        return
-    for file_name in os.listdir(absolute_folder_path):
-        file_path = os.path.join(absolute_folder_path, file_name)
-        try:
-            if os.path.isfile(file_path):
-                os.unlink(file_path)
-        except Exception as e:
-            print 'failed to clear folder {}, with error {}'.foramt(absolute_folder_path, e)
 
 def single_variable_summary(var, name):
     reduce_mean = tf.reduce_mean(var)
     tf.summary.scalar('{}_reduce_mean'.format(name), reduce_mean)
     tf.summary.histogram('{}_histogram'.format(name), var)
 
+
 class word2vec(object):
-    def __init__(self, vocab_size, batch_size=32, context_window=2, embedding_size=512, neg_sample_size=2,
+    """
+    A word2dev model, supports both `CBOW` and `SKIP_GRAM` implementation.
+
+    Attributes:
+        vocab_size (int): the dimension of vocabulary
+        embedding_size (int): the dimension of distributed representation of words
+        embedding (TF Variable, [vocab_size, embedding_size]): the trainable word embedding
+
+    Negative Contrastive Estimator (NCE) loss:
+        neg_sample_size (int): the number of negative samples for each loss calculation
+        weight (TF Variable, [vocab_size, embedding_size]): the NCE_Weight
+        bias (TF Variable, [vocab_size]): the NCE_Bias
+    """
+
+    def __init__(self, vocab_size, batch_size=32, context_window=2,
+                 embedding_size=512, neg_sample_size=2,
                  learning_rate=0.0001, model_name='word2vec', model_type='CBOW'):
+
         self.model_type = model_type
-        self.vocab_size = vocab_size
         self.batch_size = batch_size
         self.context_window = context_window
         self.embedding_size = embedding_size
+        self.vocab_size = vocab_size
         self.neg_sample_size = neg_sample_size
         self.learning_rate = learning_rate
         self.model_name = model_name
+
+        #self.graph = tf.Graph()
+        #self.sess = tf.Session(self.graph)
 
         # assert config.batch_size % config.num_skip == 0
         # assert config.num_skip <= 2 * config.context_window
 
     def _init_placeholders(self):
+        '''initialize the model placeholders, depending on the `model_type`.
+
+        '''
         if self.model_type == 'CBOW':
             self.X = tf.placeholder(tf.int32, shape=[self.batch_size, self.context_window * 2],
                                     name="input_X")
@@ -74,20 +59,33 @@ class word2vec(object):
             raise ValueError('unknown model type {} is found...'.format(self.model_type))
         self.y = tf.placeholder(tf.int32, shape=[self.batch_size, 1], name="input_y")
 
+    def _init_variables(self, saving_steps):
+        '''initialize the TF variables for model, add summary for them.
 
-    def _init_variables(self):
+        '''
         self.global_step = tf.Variable(0, name='global_step', trainable=False, dtype=tf.int32)
+        self.increment_global_step_op = tf.assign(self.global_step,
+                                                  self.global_step + saving_steps,
+                                                  name='increment_step')
+
         init_width = 0.5 / self.embedding_size
         self.embedding = tf.Variable(
             tf.random_uniform([self.vocab_size, self.embedding_size], -init_width, init_width),
             name='embedding')
+
         self.weight = tf.Variable(
             tf.truncated_normal([self.vocab_size, self.embedding_size],
                                 stddev=1. / math.sqrt(self.embedding_size)),
             name='weight')
         self.bias = tf.Variable(tf.zeros([self.vocab_size]), name='bias')
 
+        tf.summary.histogram("embedding_matrix", self.embedding)
+        tf.summary.histogram("NCE_weight", self.weight)
+        tf.summary.histogram("NCE_bias", self.bias)
+
     def cbow_batch_content(self):
+        '''generate a random set of X and y for CBOW model
+        '''
         span = 2 * self.context_window + 1
         X = np.zeros(shape=(self.batch_size, span - 1), dtype=np.int32)
         y = np.zeros(shape=(self.batch_size, 1), dtype=np.int32)
@@ -101,6 +99,11 @@ class word2vec(object):
         return X, y
 
     def _build_graph(self):
+        '''build the graph, lookup the embedding for X and use NCE for loss
+
+        For CBOW model:
+            the input to `nce_loss` is the reduced sum of `X_embedded`.
+        '''
         X_embedded = tf.nn.embedding_lookup(self.embedding, self.X)
         if self.model_type == 'CBOW':
             X_embedded = tf.reduce_sum(X_embedded, 1)
@@ -113,9 +116,9 @@ class word2vec(object):
         single_variable_summary(self.loss, 'loss')
         self.train = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.loss)
 
-
-    def _retore_model(self,sess):
-
+    def _retore_model(self, sess):
+        '''restore the placeholders and Variables by name, given the session.
+        '''
         self.X = sess.graph.get_tensor_by_name("input_X:0")
         self.y = sess.graph.get_tensor_by_name("input_y:0")
         self.global_step = sess.graph.get_tensor_by_name("global_step:0")
@@ -124,17 +127,14 @@ class word2vec(object):
         self.loss = sess.graph.get_tensor_by_name("Mean:0")
         self.increment_global_step_op = sess.graph.get_tensor_by_name("increment_step:0")
 
-
     def train(self, batches, config, restore_model=False):
         if not restore_model:
             clear_folder(config['log_path'])
             clear_folder(config['model_path'])
 
             self._init_placeholders()
-            self._init_variables()
+            self._init_variables(config['saving_steps'])
             self._build_graph()
-
-            self.increment_global_step_op = tf.assign(self.global_step, self.global_step + config['saving_steps'], name='increment_step')
             init = tf.global_variables_initializer()
             saver = tf.train.Saver(max_to_keep=2, keep_checkpoint_every_n_hours=1)
         else:
