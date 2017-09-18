@@ -54,10 +54,12 @@ class word2vec(object):
         if eval_mode:
             self._restore_model()
             self._eval_graph()
+
         elif not restore_model:
             clear_folder(self.log_path)
             clear_folder(self.model_path)
             self._build_graph(saving_steps)
+
         else:
             self._restore_model()
 

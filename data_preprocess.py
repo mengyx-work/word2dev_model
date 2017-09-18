@@ -4,6 +4,8 @@ import pandas as pd
 
 
 def generate_tensorboard_token_dict(pickle_file, token_dict_name='tensorboard_token_dict.tsv'):
+    '''generate a .tsv file for TensorBoard visualization purpose
+    '''
     pickle_file_path = os.path.join(os.path.expanduser("~"), pickle_file)
     with open(pickle_file_path, 'rb') as input_stream:
         data = pickle.load(input_stream)
@@ -18,6 +20,12 @@ def generate_tensorboard_token_dict(pickle_file, token_dict_name='tensorboard_to
 
 
 def create_cbow_data(titles, context_window):
+    '''create training_list and target_list from a list of titles, given the `context_window`.
+
+    Return:
+        training_list (list): a list of index sequence with fixed length 2*context_window for training
+        target_list (list): a list of target
+    '''
     span = 2 * context_window + 1
     missing_count = 0
     training_list = []
@@ -39,9 +47,9 @@ def create_cbow_data(titles, context_window):
     return training_list, target_list
 
 
-def generate_cbow_pickle_file(input_pickle_file, output_pickle_file, context_window):
-    data_path = '/Users/matt.meng'
-
+def generate_cbow_pickle_file(data_path, input_pickle_file, output_pickle_file, context_window):
+    '''create the CBOW model training data(pickle file) from the processed title data (pickle file).
+    '''
     with open(os.path.join(data_path, input_pickle_file)) as input_file:
         data = pickle.load(input_file)
     print 'found {} titles from pickle file'.format(len(data['titles']))
@@ -54,18 +62,19 @@ def generate_cbow_pickle_file(input_pickle_file, output_pickle_file, context_win
         pickle.dump(content, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
-def main():
-    #'''
+def CBOW_datq_generator():
+    data_path = '/Users/matt.meng'
     #input_pickle_file = 'processed_titles_data.pkl'
     #output_pickle_file = 'titles_CBOW_data.pkl'
     input_pickle_file = 'lemmanized_no_stop_words_processed_titles.pkl'
     output_pickle_file = 'lemmanized_no_stop_words_CBOW_data.pkl'
     context_window = 1
-    generate_cbow_pickle_file(input_pickle_file, output_pickle_file, context_window)
-    #'''
+    generate_cbow_pickle_file(data_path, input_pickle_file, output_pickle_file, context_window)
 
-    #pickle_file = 'processed_titles_data.pkl'
-    #generate_tensorboard_token_dict(pickle_file)
+
+def tensorboard_dict_generator():
+    pickle_file = 'lemmanized_no_stop_words_CBOW_data.pkl'
+    generate_tensorboard_token_dict(pickle_file)
 
 if __name__ == '__main__':
-    main()
+    CBOW_datq_generator()
