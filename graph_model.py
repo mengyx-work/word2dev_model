@@ -80,7 +80,6 @@ class word2vec(object):
 
     def _init_variables(self, saving_steps):
         '''initialize the TF variables for model, add summary for them.
-
         '''
         self.global_saving_step = tf.Variable(0, name='global_step', trainable=False, dtype=tf.int32)
         self.increment_saving_step_op = tf.assign(self.global_saving_step,
@@ -194,13 +193,19 @@ class word2vec(object):
 
 
     def saving_step_run(self):
-        '''save models and increment the global_step
+        '''to run when `global_step` reaches the saving step point,
+         save models and increment the global_step
         '''
         _ = self.sess.run(self.increment_saving_step_op)
         self.saver.save(self.sess, os.path.join(self.model_path, 'models'), global_step=self.global_saving_step)
 
 
     def display_step_run(self, start_time, training_batch, target_batch):
+        '''to run when `global_step` reaches the display step point,
+        display the loss and time cost
+        Return:
+            cur_time: the current time to update the time
+        '''
         loss, summary = self.sess.run([self.loss, self.merged_summary_op],
                                       feed_dict={self.X: training_batch, self.y: target_batch})
         self.writer.add_summary(summary, self.global_step)
