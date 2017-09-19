@@ -19,9 +19,9 @@ def model_train():
     model_config['embedding_size'] = 128
     model_config['neg_sample_size'] = 2
     model_config['learning_rate'] = 0.0005
-    model_config['saving_steps'] = 500
-    model_config['model_name'] = 'word2vec'
-    model_config['restore_model'] = False
+    model_config['saving_steps'] = 20000
+    model_config['model_name'] = 'word2vec_lemmatized_no_stop_words'
+    model_config['restore_model'] = True
     model_config['eval_mode'] = False
     batches = dataGen.generate_sequence(model_config['batch_size'])
 
@@ -40,7 +40,7 @@ def model_train():
 
     epoch_num = 20000
     training_config['batches'] = batches
-    training_config['display_steps'] = 200
+    training_config['display_steps'] = 10000
     training_config['saving_steps'] = model_config['saving_steps']
     training_config['num_batches'] = int(dataGen.data_size * epoch_num / model_config['batch_size'])
     print 'total #batches: {}, vocab_size: {}'.format(training_config['num_batches'], model_config['vocab_size'])
