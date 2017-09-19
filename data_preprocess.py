@@ -74,7 +74,9 @@ def CBOW_datq_generator():
 
 def tensorboard_dict_generator():
     pickle_file = 'lemmanized_no_stop_words_CBOW_data.pkl'
-    generate_tensorboard_token_dict(pickle_file)
+    token_dict_name = 'lemmatized_tensorboard_token_dict.tsv'
+    generate_tensorboard_token_dict(pickle_file, token_dict_name)
 
 if __name__ == '__main__':
-    CBOW_datq_generator()
+    #CBOW_datq_generator()
+    tensorboard_dict_generator()
