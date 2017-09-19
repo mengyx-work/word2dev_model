@@ -1,7 +1,7 @@
 import tensorflow as tf
 import numpy as np
 import sys, os, math, collections, time, multiprocessing
-from data import DataGenerator
+from data_feed import DataGenerator
 from model_utils import create_local_model_path, create_local_log_path, clear_folder, \
     generate_tensorboard_script, model_meta_file
 
@@ -53,7 +53,7 @@ class word2vec(object):
 
         if eval_mode:
             self._restore_model()
-            self._eval_graph()
+            self._build_eval_graph()
 
         elif not restore_model:
             clear_folder(self.log_path)
@@ -79,6 +79,7 @@ class word2vec(object):
         # placeholder for one title of varying length
         self.eval_X = tf.placeholder(tf.int32, shape=[None], name="eval_X")
         self.y = tf.placeholder(tf.int32, shape=[self.batch_size, 1], name="input_y")
+
 
     def _init_variables(self, saving_steps):
         '''initialize the TF variables for model, add summary for them.
@@ -138,18 +139,19 @@ class word2vec(object):
         self.train_op = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.loss, name="train_op")
 
 
-    def _eval_graph(self):
+    def _build_eval_graph(self):
         '''create the eval graph
         '''
         with self.graph.as_default():
             self.norm_embedding = tf.nn.l2_normalize(self.embedding, 1)
-            eval_X_embedded = tf.gather(self.norm_embedding, self.eval_X) # shape [title_len, embedding_size]
+            #eval_X_embedded = tf.gather(self.norm_embedding, self.eval_X) # shape [title_len, embedding_size]
+            eval_X_embedded = tf.nn.embedding_lookup(self.norm_embedding, self.eval_X) # shape [title_len, embedding_size]
             self.max_eval_X_embedded = tf.reduce_max(eval_X_embedded, axis=0)
             self.min_eval_X_embedded = tf.reduce_min(eval_X_embedded, axis=0)
             self.mean_eval_X_embedded = tf.reduce_mean(eval_X_embedded, axis=0)
 
 
-    def eval(self, title_list):
+    def predict(self, title_list):
         with self.graph.as_default():
             max_X, min_X, mean_X = self.sess.run([self.max_eval_X_embedded,
                                                   self.min_eval_X_embedded,
@@ -233,74 +235,3 @@ class word2vec(object):
 
                 if self.global_step % display_steps == 0:
                     start_time = self.display_step_run(start_time, training_batch, target_batch)
-
-
-
-def model_train():
-
-    #pickle_file = 'titles_CBOW_data.pkl'
-    pickle_file = 'lemmanized_no_stop_words_CBOW_data.pkl'
-    pickle_file_path = os.path.join(os.path.expanduser("~"), pickle_file)
-    dataGen = DataGenerator(pickle_file_path)
-
-    model_config, training_config = {}, {}
-    model_config['vocab_size'] = dataGen.vocab_size
-    model_config['batch_size'] = 32
-    model_config['context_window'] = 1
-    model_config['embedding_size'] = 128
-    model_config['neg_sample_size'] = 2
-    model_config['learning_rate'] = 0.0005
-    model_config['saving_steps'] = 500
-    model_config['model_name'] = 'word2vec'
-    model_config['restore_model'] = True
-    model_config['eval_mode'] = False
-    batches = dataGen.generate_sequence(model_config['batch_size'])
-
-    use_gpu = False
-    if use_gpu:
-        model_config['sess_config'] = tf.ConfigProto(log_device_placement=False,
-                                                     gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.5))
-    else:
-        os.environ['CUDA_VISIBLE_DEVICES'] = '-1'  # the only way to completely not use GPU
-        model_config['sess_config'] = tf.ConfigProto(intra_op_parallelism_threads=NUM_THREADS)
-
-    model_config['model_path'] = create_local_model_path(COMMON_PATH, model_config['model_name'])
-    model_config['log_path'] = create_local_log_path(COMMON_PATH, model_config['model_name'])
-    generate_tensorboard_script(model_config['log_path'])  # create the script to start a tensorboard session
-    model = word2vec(**model_config)
-
-    epoch_num = 20000
-    training_config['batches'] = batches
-    training_config['display_steps'] = 200
-    training_config['saving_steps'] = model_config['saving_steps']
-    training_config['num_batches'] = int(dataGen.data_size * epoch_num / model_config['batch_size'])
-    print 'total #batches: {}, vocab_size: {}'.format(training_config['num_batches'], model_config['vocab_size'])
-    model.train(**training_config)
-
-
-def model_eval():
-    model_config = {}
-    model_config['model_name'] = 'word2vec'
-    model_config['restore_model'] = True
-    model_config['eval_mode'] = True
-
-    use_gpu = False
-    if use_gpu:
-        model_config['sess_config'] = tf.ConfigProto(log_device_placement=False,
-                                                     gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.5))
-    else:
-        os.environ['CUDA_VISIBLE_DEVICES'] = '-1'  # the only way to completely not use GPU
-        model_config['sess_config'] = tf.ConfigProto(intra_op_parallelism_threads=NUM_THREADS)
-
-    model_config['model_path'] = create_local_model_path(COMMON_PATH, model_config['model_name'])
-    model_config['log_path'] = create_local_log_path(COMMON_PATH, model_config['model_name'])
-    model = word2vec(**model_config)
-    max_X, min_X, mean_X = model.eval([2, 4, 5])
-    print max_X
-    print min_X
-
-
-if __name__ == '__main__':
-    NUM_THREADS = multiprocessing.cpu_count()
-    COMMON_PATH = os.path.join(os.path.expanduser("~"), 'local_tensorflow_content')
-    model_eval()
