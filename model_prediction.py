@@ -91,11 +91,15 @@ def main():
     predicted_titles_pickle_file = 'predicted_titles.pkl'
     model_name = 'word2vec_lemmatized_no_stop_words'
 
-    #expected_keys = {"titles": 'titles', "url": 'url', 'pageView': "pageViw", 'reverse_token_dict': 'reverse_token_dict'}
+    expected_keys = {"titles": 'titles',
+                     "url": 'url',
+                     'pageView': "pageViw",
+                     'reverse_token_dict': 'reverse_token_dict'}
+
     lemmatized_expected_keys = {"titles": 'target_titles',
                                 "url": 'url',
-                                'pageView': "pageViw",
-                                'reverse_token_dict': 'reverse_token_dict'}
+                                "pageView": "pageViw",
+                                "reverse_token_dict": 'reverse_token_dict'}
 
     content_dict = collect_multi_keys_from_pickle_file(titles_pickle_file, lemmatized_expected_keys)
     word2vec_model = build_word2vec_model(model_name)
@@ -104,6 +108,8 @@ def main():
     pickle_file_path = os.path.join(os.path.expanduser("~"), predicted_titles_pickle_file)
     with open(pickle_file_path, 'wb') as output_stream:
         pickle.dump(processed_titles, output_stream, protocol=pickle.HIGHEST_PROTOCOL)
+    print "saving {} processed titles into pickle file {}".format(len(processed_titles), pickle_file_path)
+
 
 if __name__ == "__main__":
     main()
