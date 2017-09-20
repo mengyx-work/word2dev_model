@@ -63,12 +63,16 @@ def generate_cbow_pickle_file(data_path, input_pickle_file, output_pickle_file, 
 
 
 def CBOW_datq_generator():
+    ''' prepare the CBOW model training data from regular title pickle file
+    '''
     data_path = '/Users/matt.meng'
     #input_pickle_file = 'processed_titles_data.pkl'
     #output_pickle_file = 'titles_CBOW_data.pkl'
     input_pickle_file = 'lemmanized_no_stop_words_processed_titles.pkl'
-    output_pickle_file = 'lemmanized_no_stop_words_CBOW_data.pkl'
-    context_window = 1
+
+    #output_pickle_file = 'lemmanized_no_stop_words_CBOW_data.pkl'
+    output_pickle_file = 'lemmanized_no_stop_words_CBOW_data_context_window_2.pkl'
+    context_window = 2
     generate_cbow_pickle_file(data_path, input_pickle_file, output_pickle_file, context_window)
 
 
@@ -78,5 +82,5 @@ def tensorboard_dict_generator():
     generate_tensorboard_token_dict(pickle_file, token_dict_name)
 
 if __name__ == '__main__':
-    #CBOW_datq_generator()
-    tensorboard_dict_generator()
+    CBOW_datq_generator()
+    #tensorboard_dict_generator()
