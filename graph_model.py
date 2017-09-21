@@ -1,9 +1,8 @@
 import tensorflow as tf
 import numpy as np
-import sys, os, math, collections, time, multiprocessing
-from data_feed import DataGenerator
-from model_utils import create_local_model_path, create_local_log_path, clear_folder, \
-    generate_tensorboard_script, model_meta_file
+import multiprocessing, os, math, collections, time, random
+from model_utils import clear_folder, model_meta_file
+from model_utils import create_local_model_path, create_local_log_path
 
 
 def single_variable_summary(var, name):
@@ -48,8 +47,6 @@ class word2vec(object):
         self.sess = tf.Session(graph=self.graph, config=sess_config)
         self.global_step = 0
 
-        # assert config.batch_size % config.num_skip == 0
-        # assert config.num_skip <= 2 * config.context_window
 
         if eval_mode:
             self._restore_model()
@@ -93,7 +90,6 @@ class word2vec(object):
         self.embedding = tf.Variable(
             tf.random_uniform([self.vocab_size, self.embedding_size], -init_width, init_width),
             name='embedding')
-        print "the embedding matrix: ", self.embedding
 
         self.weight = tf.Variable(
             tf.truncated_normal([self.vocab_size, self.embedding_size],
@@ -105,20 +101,6 @@ class word2vec(object):
         tf.summary.histogram("NCE_weight", self.weight)
         tf.summary.histogram("NCE_bias", self.bias)
 
-    def cbow_batch_content(self):
-        '''generate a random set of X and y for CBOW model
-        '''
-        span = 2 * self.context_window + 1
-        X = np.zeros(shape=(self.batch_size, span - 1), dtype=np.int32)
-        y = np.zeros(shape=(self.batch_size, 1), dtype=np.int32)
-        buffer = collections.deque(maxlen=span)
-        buffer.extend(np.random.randint(self.vocab_size, size=span))
-        for i in xrange(self.batch_size):
-            buffer_list = list(buffer)
-            y[i, 0] = buffer_list.pop(self.context_window)
-            X[i] = buffer_list
-            buffer.append(np.random.randint(self.vocab_size, size=1))
-        return X, y
 
     def _create_loss(self):
         '''build the graph, lookup the embedding for X and use NCE for loss
@@ -217,6 +199,14 @@ class word2vec(object):
         print 'the loss: {} at step {}, using {:.2f} minutes'.format(loss, self.global_step, 1.*(cur_time-start_time)/60.)
         return cur_time
 
+    def next_feed(self, batches):
+        if self.model_type == 'CBOW':
+            training_batch, target_batch = next(batches)
+        else:
+            training_batch, target_batch = next(batches)
+            target_batch = [[target] for target in target_batch]
+        return training_batch, target_batch
+
 
     def train(self, batches, num_batches, saving_steps, display_steps):
 
@@ -226,7 +216,8 @@ class word2vec(object):
 
             start_time = time.time()
             while self.global_step < num_batches:
-                training_batch, target_batch = next(batches)
+                #training_batch, target_batch = next(batches)
+                training_batch, target_batch = self.next_feed(batches)
                 _ = self.sess.run([self.train_op], feed_dict={self.X: training_batch, self.y: target_batch})
                 self.global_step += 1
 
@@ -235,3 +226,84 @@ class word2vec(object):
 
                 if self.global_step % display_steps == 0:
                     start_time = self.display_step_run(start_time, training_batch, target_batch)
+
+
+
+def cbow_batch_content(self, batch_size, vocab_size, context_window):
+    '''generate a random set of X and y for CBOW model
+    '''
+    span = 2 * self.context_window + 1
+    X = np.zeros(shape=(batch_size, span - 1), dtype=np.int32)
+    y = np.zeros(shape=(batch_size, 1), dtype=np.int32)
+    buffer = collections.deque(maxlen=span)
+    buffer.extend(np.random.randint(vocab_size, size=span))
+    for i in xrange(batch_size):
+        buffer_list = list(buffer)
+        y[i, 0] = buffer_list.pop(context_window)
+        X[i] = buffer_list
+        buffer.append(np.random.randint(vocab_size, size=1))
+    return X, y
+
+
+def skip_gram_batch_content(context_window=2, batch_size=32, vocab_size=1024, num_skips=4):
+    assert batch_size % num_skips == 0
+    assert num_skips <= 2 * context_window
+
+    span = 2 * context_window + 1
+    X = np.zeros(shape=(batch_size), dtype=np.int32)
+    y = np.zeros(shape=(batch_size, 1), dtype=np.int32)
+    buffer = collections.deque(maxlen=span)
+    buffer.extend(np.random.randint(vocab_size, size=span))
+    for i in xrange(batch_size // num_skips):
+        cur_target = buffer[context_window]
+        targets_to_avoid = [cur_target]
+        for j in xrange(num_skips):
+            while cur_target in targets_to_avoid:
+                cur_target = random.randint(0, span - 1)
+            targets_to_avoid.append(cur_target)
+            y[i*num_skips+j, 0] = cur_target
+            X[i*num_skips+j] = buffer[context_window]
+        buffer.append(np.random.randint(vocab_size, size=1))
+    return X, y
+
+
+
+def main():
+    model_config = {}
+    model_config['batch_size'] = 32
+    model_config['context_window'] = 2
+    model_config['embedding_size'] = 128
+    model_config['neg_sample_size'] = 10
+    model_config['learning_rate'] = 0.001
+    model_config['model_name'] = 'word2vec_test'
+    model_config['restore_model'] = False
+    model_config['eval_mode'] = False
+    model_config['model_type'] = 'SKIP_GRAM'
+    model_config['model_path'] = create_local_model_path(COMMON_PATH, model_config['model_name'])
+    model_config['log_path'] = create_local_log_path(COMMON_PATH, model_config['model_name'])
+
+    use_gpu = False
+    if use_gpu:
+        model_config['sess_config'] = tf.ConfigProto(log_device_placement=False,
+                                                     gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.5))
+    else:
+        os.environ['CUDA_VISIBLE_DEVICES'] = '-1'  # the only way to completely not use GPU
+        model_config['sess_config'] = tf.ConfigProto(intra_op_parallelism_threads=NUM_THREADS)
+
+    model = word2vec(**model_config)
+
+
+    with model.graph.as_default():
+        input_X_, input_y = skip_gram_batch_content()
+        print "input_X_: ", input_X_
+        print "input_y: ", input_y
+        _, loss = model.sess.run([model.train_op, model.loss], feed_dict={model.X: input_X_, model.y: input_y})
+        print "the model loss: {}".format(loss)
+
+
+if __name__ == '__main__':
+
+    NUM_THREADS = 2 * multiprocessing.cpu_count() - 1
+    COMMON_PATH = os.path.join(os.path.expanduser("~"), 'local_tensorflow_content')
+
+    main()

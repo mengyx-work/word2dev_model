@@ -89,6 +89,7 @@ def predict_titles_with_word2vec(content_dict, model, display_couner=1000, count
 def main():
     titles_pickle_file = 'lemmanized_no_stop_words_scrambled_titles.pkl'
     predicted_titles_pickle_file = 'predicted_titles.pkl'
+    
     model_name = 'word2vec_lemmatized_no_stop_words'
 
     expected_keys = {"titles": 'titles',
