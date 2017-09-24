@@ -138,11 +138,14 @@ def tensorboard_dict_generator():
     #pickle_file = 'lemmanized_no_stop_words_CBOW_data.pkl'
     #token_dict_name = 'lemmatized_tensorboard_token_dict.tsv'
 
-    pickle_file = 'lemmatize_only_scrambled_1_times_titles.pkl'
-    token_dict_name = 'tensorboard_lemmatize_only_scrambled_dict.tsv'
-    
+    #pickle_file = 'lemmatize_only_scrambled_1_times_titles.pkl'
+    #token_dict_name = 'tensorboard_lemmatize_only_scrambled_dict.tsv'
+
+    pickle_file = 'update_lemmatize_only_scrambled_3_times_titles.pkl'
+    token_dict_name = 'tensorboard_update_lemmatize_only_scrambled_dict.tsv'
+
     generate_tensorboard_token_dict(pickle_file, token_dict_name)
 
 if __name__ == '__main__':
-    word2vec_data_generator()
-    #tensorboard_dict_generator()
+    #word2vec_data_generator()
+    tensorboard_dict_generator()
