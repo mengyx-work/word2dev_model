@@ -144,8 +144,8 @@ def tensorboard_dict_generator():
     #pickle_file = 'update_lemmatize_only_scrambled_3_times_titles.pkl'
     #token_dict_name = 'tensorboard_update_lemmatize_only_scrambled_dict.tsv'
 
-    pickle_file = 'full_dedup_scrambled_1_times_titles.pkl'
-    token_dict_name = 'tensorboard_full_dedup_scrambled_1_dict.tsv'
+    pickle_file = 'full_dedup_scrambled_1_token_thres_8_titles.pkl'
+    token_dict_name = 'tensorboard_full_dedup_scrambled_1_thre_8_dict.tsv'
 
     generate_tensorboard_token_dict(pickle_file, token_dict_name)
 
